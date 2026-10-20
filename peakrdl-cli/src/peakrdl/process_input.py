@@ -1,8 +1,9 @@
-from typing import TYPE_CHECKING, List, Dict, Any, Sequence
+from typing import TYPE_CHECKING, List, Dict, Any, Optional, Sequence
 import re
 import os
 
 from systemrdl.messages import FileSourceRef
+from systemrdl.node import AddrmapNode, Node
 
 if TYPE_CHECKING:
     import argparse
@@ -57,6 +58,17 @@ def add_elaborate_arguments(parser: 'argparse._ActionsContainer') -> None:
                 "instantiated name is the same as the component's type name"
     )
     parser.add_argument(
+        "--instance",
+        dest="instance_path",
+        metavar="PATH",
+        default=None,
+        help="Export a sub-hierarchy rather than the top component. PATH is a "
+                "hierarchical instance path relative to the top, for example "
+                "'u_subsystem.u_block'. Parameter overrides written on that "
+                "instance in the RDL source are honoured, so they do not have "
+                "to be restated with -P"
+    )
+    parser.add_argument(
         "-P",
         dest="parameters",
         metavar="PARAMETER=VALUE",
@@ -64,6 +76,54 @@ def add_elaborate_arguments(parser: 'argparse._ActionsContainer') -> None:
         default=[],
         help='Specify value for a top-level SystemRDL parameter',
     )
+
+
+def resolve_instance(
+    rdlc: 'RDLCompiler',
+    top_node: 'AddrmapNode',
+    instance_path: Optional[str],
+) -> 'AddrmapNode':
+    """
+    Resolve the --instance option to the node to export.
+    Returns top_node unchanged if no instance path was given.
+    """
+    if instance_path is None:
+        return top_node
+
+    # find_by_path() returns None for an unknown instance, but raises if the
+    # path is not well-formed. Pass its message through.
+    try:
+        node = top_node.find_by_path(instance_path)
+    except (ValueError, IndexError) as e:
+        rdlc.msg.fatal(f"--instance: invalid instance path '{instance_path}': {e}")
+        raise ValueError from e
+
+    if node is None:
+        rdlc.msg.fatal(
+            f"--instance: no such instance path '{instance_path}' under "
+            f"top component '{top_node.inst_name}'"
+        )
+        raise ValueError
+
+    # A '^' in the path can resolve above the top, which is out of scope.
+    n: Optional[Node] = node
+    while n is not None and n != top_node:
+        n = n.parent
+    if n is None:
+        rdlc.msg.fatal(
+            f"--instance: '{instance_path}' is not within top component "
+            f"'{top_node.inst_name}'"
+        )
+        raise ValueError
+
+    # The CLI has only ever exported an addrmap root. Preserve that invariant.
+    if not isinstance(node, AddrmapNode):
+        rdlc.msg.fatal(
+            f"--instance: '{instance_path}' is not an 'addrmap' component"
+        )
+        raise ValueError
+
+    return node
 
 
 def parse_parameters(rdlc: 'RDLCompiler', parameter_options: List[str]) -> Dict[str, Any]:

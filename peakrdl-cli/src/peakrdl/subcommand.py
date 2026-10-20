@@ -154,8 +154,12 @@ class ExporterSubcommand(Subcommand):
             parameters=parameters
         )
 
+        top_node = process_input.resolve_instance(
+            rdlc, root.top, options.instance_path
+        )
+
         # Run exporter
-        self.do_export(root.top, options)
+        self.do_export(top_node, options)
 
 
     def do_export(self, top_node: 'AddrmapNode', options: 'argparse.Namespace') -> None:

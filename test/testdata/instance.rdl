@@ -1,0 +1,44 @@
+// Test fixture for the --instance option.
+
+addrmap instance_block #(
+    longint unsigned FIELD_WIDTH = 1
+) {
+    default sw = rw;
+    default hw = r;
+
+    reg {
+        field {
+            desc = "Width tracks the instance's FIELD_WIDTH override";
+        } val[FIELD_WIDTH] = 0;
+    } r1;
+};
+
+addrmap instance_wrapper #(
+    longint unsigned FIELD_WIDTH = 1
+) {
+    instance_block #(.FIELD_WIDTH(FIELD_WIDTH)) u_leaf;
+};
+
+addrmap instance_top {
+    default sw = rw;
+    default hw = r;
+
+    instance_block #(.FIELD_WIDTH(2)) u_narrow;
+    instance_block #(.FIELD_WIDTH(7)) u_wide;
+
+    addrmap {
+        instance_block #(.FIELD_WIDTH(4)) u_mid;
+    } u_sub;
+
+    instance_block #(.FIELD_WIDTH(3)) u_arr[4];
+
+    instance_wrapper #(.FIELD_WIDTH(9)) u_wrap;
+
+    addrmap {
+        instance_block #(.FIELD_WIDTH(6)) u_inner[2];
+    } u_nest[3];
+
+    reg {
+        field {} f[1] = 0;
+    } top_reg;
+};
